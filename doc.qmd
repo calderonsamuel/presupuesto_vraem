@@ -1,0 +1,297 @@
+---
+title: "Reporte"
+format: 
+    docx:
+        reference-doc: doc_template.docx
+editor: visual
+execute: 
+  echo: false
+  message: false
+  warning: false
+---
+
+```{r}
+library(perutranspaeconomica)
+library(perumapas)
+library(tidyverse)
+library(sf)
+
+vraem <- readxl::read_excel("data/distritos_vraem.xlsx") |> 
+    mutate(across(.fns = casemisc::str_limpiar))
+```
+
+```{r}
+translate_pliego <- function(pliego) {
+    case_when(
+        pliego == "444" ~ "AYACUCHO",
+        pliego == "446" ~ "CUSCO",
+        pliego == "450" ~ "JUNIN",
+        TRUE ~ pliego
+    )
+}
+```
+
+Para fines de este reporte se considera VRAEM a los distritos identificados dentro de la Zona VRAEM según lo publicado por DEVIDA en el Reporte N° 7: SUPERFICIE CULTIVADA CON ARBUSTO DE HOJA DE COCA MONITOREADA EN 2021[^1] en setiembre de 2022.
+
+[^1]: Recuperado de: <https://www.gob.pe/institucion/devida/informes-publicaciones/3478761-superficie-de-cultivos-de-coca-monitoreada-en-2021>
+
+```{r}
+vraem |> 
+    knitr::kable()
+```
+
+De ellos, cinco corresponde a distritos de reciente creación, por lo que no ha sido posible obtener información de sus límites geográficos.
+
+```{r}
+distritos_nuevos <- vraem |> 
+    anti_join(mapa_distrital)
+
+distritos_nuevos|> 
+    knitr::kable()
+```
+
+```{r}
+distritos_antiguos <- vraem |> 
+    semi_join(mapa_distrital) |>
+    left_join(mapa_distrital)
+
+provincias <- distritos_antiguos |> 
+    distinct(departamento, provincia) |> 
+    left_join(mapa_provincial)
+
+regiones <- provincias |> 
+    distinct(departamento) |> 
+    left_join(mapa_regional)
+```
+
+Para el resto de distritos, se puede observar el siguiente mapa:
+
+```{r}
+#| fig-width: 8
+ggplot() +
+    geom_sf(data = provincias, aes(geometry = geometry, fill = departamento), color = "grey30") +
+    geom_sf(data = distritos_antiguos, aes(geometry = geometry), fill = "black", alpha = 0.5, color = "grey50") +
+    geom_sf_label(data = provincias, aes(geometry = geometry, label = provincia), size = 3, alpha = 0.4) +
+    scale_fill_manual(values = c("cadetblue3", "aquamarine3", "deepskyblue3"), guide = guide_legend(override.aes = list(size = NULL))) +
+    theme_void() +
+    theme(legend.position = "top", 
+          legend.title = element_blank()) +
+    labs(
+        caption = "Las etiquetas corresponden al nombre de provincia\nLa zona sombreada corresponde a los distritos dentro de la zona VRAEM"
+    ) 
+```
+
+La información se ha recopilado del portal de Consulta Amigable de la ejecución presupuestal del MEF con fecha `r format(Sys.Date(), "%d de %B de %Y")`
+
+<!--# Limpieza -->
+
+```{r}
+#| cache: true
+presupuesto_regiones <- seguimiento_ep() |> 
+    elegir_periodo_anual(periodo = 2022) |> 
+    elegir_quien_gasta(
+        nivel = "R",
+        sector = "99", 
+        pliego = "todos"
+    ) |> 
+    consultar() 
+
+presupuesto_regiones_vraem <- presupuesto_regiones |> 
+    mutate(desc_pliego = str_remove(desc_pliego, "GOBIERNO REGIONAL DEL DEPARTAMENTO DE ")) |> 
+    rename(desc_departamento = desc_pliego) |> 
+    semi_join(vraem, by = c("desc_departamento" = "departamento")) |> 
+    left_join(regiones, by = c("desc_departamento" = "departamento")) |> 
+    select(-geometry) |> 
+    rename(cod_departamento = cod_depa)
+```
+
+```{r}
+#| cache: true
+presupuesto_provincias <- seguimiento_ep() |> 
+    elegir_periodo_anual(periodo = 2022) |> 
+    elegir_quien_gasta(
+        nivel = "M", 
+        goblocal_o_manc = "M",
+        departamento = presupuesto_regiones_vraem$cod_departamento, 
+        provincia = "todos"
+    ) |> 
+    consultar() 
+
+presupuesto_provincias_vraem <- presupuesto_provincias |> 
+    semi_join(vraem, by = c("desc_provincia" = "provincia"))
+```
+
+```{r}
+#| cache: true
+presupuesto_distritos <- seguimiento_ep() |> 
+    elegir_periodo_anual(periodo = 2022) |> 
+    elegir_quien_gasta(
+        nivel = "M", 
+        goblocal_o_manc = "M",
+        departamento = presupuesto_regiones_vraem$cod_departamento, 
+        municipalidad = "todos"
+    ) |> 
+    consultar() |> 
+    filter(str_detect(desc_municipalidad, "MUNICIPALIDAD DISTRITAL")) |> 
+    rename(cod_departamento = departamento) |> 
+    mutate(
+        desc_municipalidad = str_remove(desc_municipalidad, "MUNICIPALIDAD DISTRITAL (DE )?"),
+        cod_municipalidad = str_remove(cod_municipalidad, "-.*"),
+        cod_provincia = str_extract(cod_municipalidad, "^....")
+    ) |> 
+    semi_join(presupuesto_provincias, by = "cod_provincia") |> 
+    mutate(desc_municipalidad = case_when(
+            desc_municipalidad == "QUIMBIRI" ~ "KIMBIRI",
+            TRUE ~ desc_municipalidad
+    ))
+
+presupuesto_distritos_vraem <- presupuesto_distritos |> 
+    semi_join(vraem, by = c("desc_municipalidad" = "distrito"))
+```
+
+## Ejecución presupuestal
+
+La ejecución presupuestal es un indicador de qué tanto las autoridades políticas están usando el presupuesto asignado para el ejercicio fiscal en bienes y servicios que se proveen a la población. Por lo general, estos bienes y servicios corresponden con actividades, obras o proyectos de inversión considerados en la planificación presupuestaria y la estructura de soporte para su ejecución (que incluye personal, mantenimiento, etc).
+
+Los gobiernos regionales que tienen territorio dentro de la zona VRAEM son Ayacucho, Junin y Cusco. De ellos, Ayacucho ha tenido una menor ejecución presupuestal hasta la fecha.
+
+```{r}
+ejecutado_regiones <- presupuesto_regiones_vraem |> 
+    select(departamento = desc_departamento, pim, avance_percent)
+```
+
+```{r}
+ejecutado_regiones |> 
+    left_join(regiones) |> 
+    ggplot(aes(geometry = geometry)) +
+    geom_sf(aes(fill = departamento)) +
+    scale_fill_manual(values = c("cadetblue3", "aquamarine3", "deepskyblue3"), guide = guide_legend(override.aes = list(size = NULL))) +
+    geom_sf_label(aes(label = paste0(departamento, ": ", avance_percent))) +
+    theme_void() +
+    theme(legend.position = "none")
+```
+
+A nivel de provincias se puede ver que de las provincias que tienen territorios dentro de la zona VRAEM, La Convención es la que menos ha ejecutado hasta la fecha, con solo 44.3% de avance.
+
+```{r}
+ejecutado_provincias <- presupuesto_provincias_vraem |> 
+    select(cod_depa = departamento, provincia = desc_provincia, pim, avance_percent) |> 
+    left_join(regiones) |> 
+    select(departamento, provincia, pim, avance_percent)
+```
+
+```{r}
+ejecutado_provincias |> 
+    left_join(provincias) |> 
+    ggplot() +
+    geom_sf(aes(geometry = geometry, fill = departamento), data = regiones) +
+    geom_sf(aes(geometry = geometry), fill = alpha("black", 0.5), color = "grey50") +
+    geom_sf_label(aes(geometry = geometry, label = paste0(provincia, ": ", avance_percent, "%")), size = 3, alpha = 0.4) +
+    scale_fill_manual(values = c("cadetblue3", "aquamarine3", "deepskyblue3"), guide = guide_legend(override.aes = list(size = NULL))) +
+    theme_void() +
+    theme(legend.position = "top", legend.title = element_blank()) +
+    labs(
+        caption = "La zona sombreada corresponde al territorio total de la provincia\ncon al menos un distrito considerado en la zona VRAEM"
+    )
+```
+
+Los distritos muestran mayor variabilidad en su ejecución. Por ejemplo, los distritos vecinos de Santa Rosa y Anchihuay son los que tienen respectivamente la mayor (63.4%) y menor (27.9%) ejecución presupuestal en lo que va del año. El mapa muestra la información para los distritos no mencionados.
+
+```{r}
+ejecutado_distritos <- presupuesto_distritos_vraem |> 
+    select(cod_depa = cod_departamento, cod_provincia, municipio = desc_municipalidad, pim, avance_percent) |> 
+    left_join(regiones) |> 
+    select(departamento, cod_provincia:avance_percent) |> 
+    left_join(provincias, by = c("cod_provincia" = "cod_prov")) |> 
+    select(departamento = departamento.x, provincia, municipio:avance_percent)
+```
+
+```{r}
+ejecutado_distritos |> 
+    left_join(mapa_distrital, by = c("departamento", "provincia", "municipio" = "distrito")) |> 
+    ggplot() +
+    geom_sf(aes(geometry = geometry, fill = departamento), provincias) +
+    geom_sf(aes(geometry = geometry), fill = alpha("grey20", 0.5)) +
+    ggrepel::geom_label_repel(aes(geometry = geometry, label = paste0(municipio, ": ", avance_percent, "%")), stat = "sf_coordinates", size = 2.5, fill = alpha("white", 0.5)) +
+    scale_fill_manual(values = c("cadetblue3", "aquamarine3", "deepskyblue3"), guide = guide_legend(override.aes = list(size = NULL))) +
+    theme_void() +
+    theme(legend.position = "top", legend.title = element_blank()) +
+    labs(
+        caption = "Las etiquetas corresponden al nombre del distrito\nLa zona sombreada corresponde alos distritos dentro de la zona VRAEM"
+    )
+```
+
+En este punto es importante resaltar que el nivel municipal es el que necesita mayor acompañamiento y promoción de sus capacidades de gestión, debido a que son los que tienen la responsabilidad más directa con las necesidades cotidianas de la población.
+
+## Fuentes de financiamiento
+
+Lo siguiente a revisar es de dónde proviene el financiamiento para la ejecución presupuestal en la zona de influencia del VRAEM. En específico, se revisará de qué manera se aprovechan los recursos obtenidos por el rubro "CANON Y SOBRECANON, REGALIAS, RENTA DE ADUANAS Y PARTICIPACIONES".
+
+```{r}
+#| cache: true
+financiamiento_regiones <- seguimiento_ep() |> 
+    elegir_periodo_anual(periodo = 2022) |> 
+    elegir_quien_gasta(
+        nivel = "R", 
+        sector = "99", 
+        pliego = c("444", "446", "450")
+    ) |> 
+    elegir_con_que_se_financia(fuente_financiamiento = 1:5, rubro = "todos") |> 
+    consultar()
+```
+
+La siguiente tabla muestra que, de las regiones revisadas, la que más recursos recibe del rubro referido es Cusco, con un monto superior a los 4 mil millones de soles. Este monto representa el 24.8 del total del presupuesto que recibe el gobierno regional. De ese monto, en lo que va del ejercicio presupuestal se ha ejecutado el 61.9%. Se cuenta con la misma información para Ayacucho y Junin, donde el peso del canon es menor en el presupuesto total, sin dejar de ser significativo.
+
+```{r}
+financiamiento_regiones |> 
+    as_tibble() |> 
+    mutate(departamento = translate_pliego(pliego)) |> 
+    group_by(departamento) |> 
+    mutate(porcentaje = (pim/sum(pim)*100) |> round(1)) |> 
+    ungroup() |> 
+    filter(cod_rubro == 18) |> 
+    select(departamento, pim, peso = porcentaje, ejecutado_rubro = avance_percent) |> 
+    knitr::kable()
+```
+
+<!--# Provincias -->
+
+```{r}
+#| cache: true
+financiamiento_provincias <- provincias |> 
+    select(cod_prov) |> 
+    separate(cod_prov, into = c("departamento", "provincia"), sep = 2) |> 
+    mutate(data = map2(departamento, provincia, ~{
+        seguimiento_ep() |> 
+            elegir_periodo_anual(periodo = 2022) |> 
+            elegir_quien_gasta(
+                nivel = "M", 
+                goblocal_o_manc = "M",
+                departamento = .x, 
+                provincia = .y
+            ) |> 
+            elegir_con_que_se_financia(fuente_financiamiento = 1:5, rubro = "todos") |> 
+            consultar()
+    })) |> 
+    select(data) |> 
+    unnest(data)
+```
+
+En lo que respecta a las provincias, se puede apreciar que la que más es financiada por el rubro "CANON Y SOBRECANON, REGALIAS, RENTA DE ADUANAS Y PARTICIPACIONES" es La Convención en Cusco, donde el rubro referido financia el 85.8% de su presupuesto total. En general, las provincias han ejecutado alrededor del 40% del presupuesto proveniente de este rubro.
+
+```{r}
+financiamiento_provincias |> 
+    as_tibble() |> 
+    group_by(departamento, provincia) |> 
+    mutate(
+        porcentaje = (pim/sum(pim)*100) |> round(1),
+        cod_prov = paste0(departamento, provincia)
+    ) |> 
+    ungroup() |> 
+    filter(cod_rubro == 18) |> 
+    select(cod_prov, pim, peso = porcentaje, ejecutado_rubro = avance_percent) |> 
+    left_join(provincias) |> 
+    select(region = departamento, provincia, pim, peso, ejecutado_rubro) |> 
+    knitr::kable()
+```
+
