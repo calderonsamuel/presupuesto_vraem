@@ -15,6 +15,7 @@ library(perutranspaeconomica)
 library(perumapas)
 library(tidyverse)
 library(sf)
+library(flextable)
 
 vraem <- readxl::read_excel("data/distritos_vraem.xlsx") |> 
     mutate(across(.fns = casemisc::str_limpiar))
@@ -31,13 +32,46 @@ translate_pliego <- function(pliego) {
 }
 ```
 
+```{r}
+doc_tbl <- function(df) {
+    df |> 
+        rename_with(~str_replace_all(.x, "_", " ")) |> 
+        flextable() |> 
+        theme_box() |> 
+        align(part = 'header', align = 'center') |> 
+        fontsize(size = 9, part = 'body') |> 
+        fontsize(size = 10, part = 'header') |> 
+        font(fontname = 'Calibri', part = 'all') |> 
+        set_table_properties("autofit")
+}
+```
+
 Para fines de este reporte se considera VRAEM a los distritos identificados dentro de la Zona VRAEM según lo publicado por DEVIDA en el Reporte N° 7: SUPERFICIE CULTIVADA CON ARBUSTO DE HOJA DE COCA MONITOREADA EN 2021[^1] en setiembre de 2022.
 
 [^1]: Recuperado de: <https://www.gob.pe/institucion/devida/informes-publicaciones/3478761-superficie-de-cultivos-de-coca-monitoreada-en-2021>
 
+Distritos pertenecientes a Junin:
+
 ```{r}
 vraem |> 
-    knitr::kable()
+    filter(departamento == "JUNIN") |> 
+    doc_tbl()
+```
+
+Distritos pertenecientes a Cusco:
+
+```{r}
+vraem |> 
+    filter(departamento == "CUSCO") |> 
+    doc_tbl()
+```
+
+Distritos pertenecientes a Ayacucho:
+
+```{r}
+vraem |> 
+    filter(departamento == "AYACUCHO") |> 
+    doc_tbl()
 ```
 
 De ellos, cinco corresponde a distritos de reciente creación, por lo que no ha sido posible obtener información de sus límites geográficos.
@@ -47,7 +81,7 @@ distritos_nuevos <- vraem |>
     anti_join(mapa_distrital)
 
 distritos_nuevos|> 
-    knitr::kable()
+    doc_tbl()
 ```
 
 ```{r}
@@ -87,6 +121,7 @@ La información se ha recopilado del portal de Consulta Amigable de la ejecució
 
 ```{r}
 #| cache: true
+#| label: presupuesto_regiones
 presupuesto_regiones <- seguimiento_ep() |> 
     elegir_periodo_anual(periodo = 2022) |> 
     elegir_quien_gasta(
@@ -107,6 +142,7 @@ presupuesto_regiones_vraem <- presupuesto_regiones |>
 
 ```{r}
 #| cache: true
+#| label: presupuesto_provincias
 presupuesto_provincias <- seguimiento_ep() |> 
     elegir_periodo_anual(periodo = 2022) |> 
     elegir_quien_gasta(
@@ -123,6 +159,7 @@ presupuesto_provincias_vraem <- presupuesto_provincias |>
 
 ```{r}
 #| cache: true
+#| label: presupuesto_distritos
 presupuesto_distritos <- seguimiento_ep() |> 
     elegir_periodo_anual(periodo = 2022) |> 
     elegir_quien_gasta(
@@ -136,6 +173,7 @@ presupuesto_distritos <- seguimiento_ep() |>
     rename(cod_departamento = departamento) |> 
     mutate(
         desc_municipalidad = str_remove(desc_municipalidad, "MUNICIPALIDAD DISTRITAL (DE )?"),
+        cod_municipalidad_mef = str_remove(cod_municipalidad, ".*-"),
         cod_municipalidad = str_remove(cod_municipalidad, "-.*"),
         cod_provincia = str_extract(cod_municipalidad, "^....")
     ) |> 
@@ -149,16 +187,82 @@ presupuesto_distritos_vraem <- presupuesto_distritos |>
     semi_join(vraem, by = c("desc_municipalidad" = "distrito"))
 ```
 
-## Ejecución presupuestal
+## Presupuesto asignado
 
-La ejecución presupuestal es un indicador de qué tanto las autoridades políticas están usando el presupuesto asignado para el ejercicio fiscal en bienes y servicios que se proveen a la población. Por lo general, estos bienes y servicios corresponden con actividades, obras o proyectos de inversión considerados en la planificación presupuestaria y la estructura de soporte para su ejecución (que incluye personal, mantenimiento, etc).
+Durante cada ejercicio presupuestal los gobiernos regionales y municipalidades cuentan con un presupuesto para la implementación de sus actividades planificadas. A lo largo del ejercicio presupuestal, las instituciones van solicitando cambios que se reflejan como cifra en el Presupuesto Institucional Modificado.
 
-Los gobiernos regionales que tienen territorio dentro de la zona VRAEM son Ayacucho, Junin y Cusco. De ellos, Ayacucho ha tenido una menor ejecución presupuestal hasta la fecha.
+El siguiente cuadro muestra el Presupuesto Institucional Modificado obtenido por los gobiernos regionales mencionados en lo que val del año. Se puede ver que en todos los casos es superior a 2 mil millones de soles, con Cusco cercano a los 3 mil millones de soles.
 
 ```{r}
 ejecutado_regiones <- presupuesto_regiones_vraem |> 
     select(departamento = desc_departamento, pim, avance_percent)
+
+ejecutado_regiones |> 
+    select(-avance_percent) |> 
+    arrange(desc(pim)) |> 
+    doc_tbl()
 ```
+
+En el caso de las provincias, se puede ver que existe gran diferencia entre los recursos obtenidos, siendo La Convención el municipio provincial que obtiene más recursos (cerca de 1 800 millones de soles).
+
+```{r}
+ejecutado_provincias <- presupuesto_provincias_vraem |> 
+    select(cod_depa = departamento, provincia = desc_provincia, pim, avance_percent) |> 
+    left_join(regiones) |> 
+    select(departamento, provincia, pim, avance_percent)
+
+ejecutado_provincias |> 
+    select(-avance_percent) |> 
+    arrange(desc(pim)) |> 
+    doc_tbl()
+```
+
+En el caso de los distritos, se puede ver que el presupuesto es variado en ciertas provincias como Satipo, ya que ciertos distritos se ubican entre aquellos con mayor presupuesto, pero otros dentro de aquellos con menos. Los distritos de la provincia La Mar en Ayacucho reciben menos que el resto dentro de la zona VRAEM.
+
+```{r}
+ejecutado_distritos <- presupuesto_distritos_vraem |> 
+    select(cod_depa = cod_departamento, cod_provincia, municipio = desc_municipalidad, pim, avance_percent) |> 
+    left_join(regiones) |> 
+    select(departamento, cod_provincia:avance_percent) |> 
+    left_join(provincias, by = c("cod_provincia" = "cod_prov")) |> 
+    select(departamento = departamento.x, provincia, municipio:avance_percent)
+```
+
+Presupuesto Institucional Modificado de distritos con zona VRAEM en Ayacucho:
+
+```{r}
+ejecutado_distritos |> 
+    filter(departamento == 'AYACUCHO') |>  
+    select(-avance_percent, -departamento) |> 
+    arrange(desc(pim)) |> 
+    doc_tbl()
+```
+
+Presupuesto Institucional Modificado de distritos con zona VRAEM en Cusco:
+
+```{r}
+ejecutado_distritos |> 
+    filter(departamento == 'CUSCO') |>  
+    select(-avance_percent, -departamento) |> 
+    arrange(desc(pim)) |> 
+    doc_tbl()
+```
+
+Presupuesto Institucional Modificado de distritos con zona VRAEM en Junin:
+
+```{r}
+ejecutado_distritos |> 
+    filter(departamento == 'JUNIN') |>  
+    select(-avance_percent, -departamento) |> 
+    arrange(desc(pim)) |> 
+    doc_tbl()
+```
+
+## Ejecución presupuestal
+
+La ejecución presupuestal es un indicador de qué tanto las autoridades políticas están usando el presupuesto asignado para el ejercicio fiscal en bienes y servicios que se proveen a la población, y se calcula usando como base el Presupuesto Institucional Modificado. Por lo general, estos bienes y servicios corresponden con actividades, obras o proyectos de inversión considerados en la planificación presupuestaria y la estructura de soporte para su ejecución (que incluye personal, mantenimiento, etc).
+
+Los gobiernos regionales que tienen territorio dentro de la zona VRAEM son Ayacucho, Junin y Cusco. De ellos, Ayacucho ha tenido una menor ejecución presupuestal hasta la fecha.
 
 ```{r}
 ejecutado_regiones |> 
@@ -171,14 +275,7 @@ ejecutado_regiones |>
     theme(legend.position = "none")
 ```
 
-A nivel de provincias se puede ver que de las provincias que tienen territorios dentro de la zona VRAEM, La Convención es la que menos ha ejecutado hasta la fecha, con solo 44.3% de avance.
-
-```{r}
-ejecutado_provincias <- presupuesto_provincias_vraem |> 
-    select(cod_depa = departamento, provincia = desc_provincia, pim, avance_percent) |> 
-    left_join(regiones) |> 
-    select(departamento, provincia, pim, avance_percent)
-```
+A nivel de provincias se puede ver que de aquellas que tienen territorios dentro de la zona VRAEM, La Convención es la que menos ha ejecutado hasta la fecha, con solo 44.3% de avance. Recordemos que esta es la provincia con mayor PIM.
 
 ```{r}
 ejecutado_provincias |> 
@@ -195,19 +292,11 @@ ejecutado_provincias |>
     )
 ```
 
-Los distritos muestran mayor variabilidad en su ejecución. Por ejemplo, los distritos vecinos de Santa Rosa y Anchihuay son los que tienen respectivamente la mayor (63.4%) y menor (27.9%) ejecución presupuestal en lo que va del año. El mapa muestra la información para los distritos no mencionados.
+Los distritos muestran mayor variabilidad en su ejecución. Por ejemplo, los distritos vecinos de Santa Rosa y Anchihuay son los que tienen respectivamente la mayor (63.6%) y menor (28.9%) ejecución presupuestal en lo que va del año. El mapa muestra la información para los distritos no mencionados.
 
 ```{r}
-ejecutado_distritos <- presupuesto_distritos_vraem |> 
-    select(cod_depa = cod_departamento, cod_provincia, municipio = desc_municipalidad, pim, avance_percent) |> 
-    left_join(regiones) |> 
-    select(departamento, cod_provincia:avance_percent) |> 
-    left_join(provincias, by = c("cod_provincia" = "cod_prov")) |> 
-    select(departamento = departamento.x, provincia, municipio:avance_percent)
-```
-
-```{r}
-ejecutado_distritos |> 
+#| eval: false
+mapa_ejecucion_distrital <- ejecutado_distritos |> 
     left_join(mapa_distrital, by = c("departamento", "provincia", "municipio" = "distrito")) |> 
     ggplot() +
     geom_sf(aes(geometry = geometry, fill = departamento), provincias) +
@@ -219,15 +308,20 @@ ejecutado_distritos |>
     labs(
         caption = "Las etiquetas corresponden al nombre del distrito\nLa zona sombreada corresponde alos distritos dentro de la zona VRAEM"
     )
+
+ggsave("mapas/mapa_ejecucion_distrital.png", plot = mapa_ejecucion_distrital)
 ```
+
+![](mapas/mapa_ejecucion_distrital.png){fig-align="center"}
 
 En este punto es importante resaltar que el nivel municipal es el que necesita mayor acompañamiento y promoción de sus capacidades de gestión, debido a que son los que tienen la responsabilidad más directa con las necesidades cotidianas de la población.
 
 ## Fuentes de financiamiento
 
-Lo siguiente a revisar es de dónde proviene el financiamiento para la ejecución presupuestal en la zona de influencia del VRAEM. En específico, se revisará de qué manera se aprovechan los recursos obtenidos por el rubro "CANON Y SOBRECANON, REGALIAS, RENTA DE ADUANAS Y PARTICIPACIONES".
+Lo siguiente a revisar es de dónde proviene el financiamiento para la ejecución presupuestal en la zona de influencia del VRAEM. En específico, se revisará de qué manera se aprovechan los recursos obtenidos por el rubro "CANON Y SOBRECANON, REGALIAS, RENTA DE ADUANAS Y PARTICIPACIONES" y qué peso tiene esta fuente de financiamiento en el PIM de los gobiernos regionales y municipios.
 
 ```{r}
+#| label: financiamiento_regiones
 #| cache: true
 financiamiento_regiones <- seguimiento_ep() |> 
     elegir_periodo_anual(periodo = 2022) |> 
@@ -250,14 +344,15 @@ financiamiento_regiones |>
     mutate(porcentaje = (pim/sum(pim)*100) |> round(1)) |> 
     ungroup() |> 
     filter(cod_rubro == 18) |> 
-    select(departamento, pim, peso = porcentaje, ejecutado_rubro = avance_percent) |> 
-    knitr::kable()
+    select(departamento, pim_rubro = pim, peso_rubro = porcentaje, ejecutado_rubro = avance_percent) |> 
+    doc_tbl()
 ```
 
 <!--# Provincias -->
 
 ```{r}
 #| cache: true
+#| label: financiamiento_provincias
 financiamiento_provincias <- provincias |> 
     select(cod_prov) |> 
     separate(cod_prov, into = c("departamento", "provincia"), sep = 2) |> 
@@ -291,7 +386,71 @@ financiamiento_provincias |>
     filter(cod_rubro == 18) |> 
     select(cod_prov, pim, peso = porcentaje, ejecutado_rubro = avance_percent) |> 
     left_join(provincias) |> 
-    select(region = departamento, provincia, pim, peso, ejecutado_rubro) |> 
-    knitr::kable()
+    select(region = departamento, provincia, pim_rubro = pim, pero_rubro = peso, ejecutado_rubro) |> 
+    doc_tbl()
 ```
 
+```{r}
+#| label: financiamiento_distritos
+financiamiento_distritos <- seguimiento_ep() |> 
+    elegir_periodo_anual(periodo = 2022) |> 
+    elegir_quien_gasta(
+        nivel = "M",
+        goblocal_o_manc = "M",
+        municipalidad = presupuesto_distritos_vraem$cod_municipalidad_mef
+    ) |> 
+    elegir_con_que_se_financia(rubro = "todos") |> 
+    consultar()
+
+```
+
+```{r}
+financiamiento_distritos_limpio <- financiamiento_distritos |> 
+    group_by(municipalidad) |> 
+    mutate(
+        peso_rubro = (pim/sum(pim) * 100) |> round(1)
+    ) |> 
+    ungroup() |> 
+    filter(cod_rubro == 18) |> 
+    select(cod_municipalidad_mef = municipalidad,
+           pim_rubro = pim, peso_rubro, ejecucion_rubro = avance_percent) |> 
+    left_join(select(presupuesto_distritos_vraem, cod_municipalidad_mef, desc_municipalidad)) |> 
+    # select(-cod_municipalidad_mef) |> 
+    rename(distrito = desc_municipalidad) |> 
+    left_join(vraem) |> 
+    select(departamento, provincia, distrito, pim_rubro, peso_rubro, ejecucion_rubro) |> 
+    arrange(desc(pim_rubro))
+```
+
+Respecto a los distritos, nuevamente se puede ver que quienes reciben más presupuesto en ese rubro están en La Convención. No solo eso, sino que el aporte del rubro "CANON Y SOBRECANON, REGALIAS, RENTA DE ADUANAS Y PARTICIPACIONES" tiene un peso muy significativo en su presupuesto.
+
+Rubro "CANON Y SOBRECANON, REGALIAS, RENTA DE ADUANAS Y PARTICIPACIONES" en distritos de la zona VRAEM en departamento de Ayacucho
+
+```{r}
+financiamiento_distritos_limpio |> 
+    filter(departamento == "AYACUCHO") |> 
+    select(-departamento) |> 
+    doc_tbl()
+```
+
+Rubro "CANON Y SOBRECANON, REGALIAS, RENTA DE ADUANAS Y PARTICIPACIONES" en distritos de la zona VRAEM en departamento de Cusco
+
+```{r}
+financiamiento_distritos_limpio |> 
+    filter(departamento == "CUSCO") |> 
+    select(-departamento) |> 
+    doc_tbl()
+```
+
+Rubro "CANON Y SOBRECANON, REGALIAS, RENTA DE ADUANAS Y PARTICIPACIONES" en distritos de la zona VRAEM en departamento de Junin
+
+```{r}
+financiamiento_distritos_limpio |> 
+    filter(departamento == "JUNIN") |> 
+    select(-departamento) |> 
+    doc_tbl()
+```
+
+Por otro lado, es importante que los municipios ejecuten adecuadamente el presupuesto con el que cuentan. Se puede ver que son muchos los distritos donde a pesar de estar en el último trimestre del ejercicio presupuestal aún no se ejecuta ni el 40% del presupuesto proviniente tan solo de este rubro. Esto significa que la población no está sienddo beneficiada oportunamente por el dinero con el que su territorio tiene disponible, que a mediano plazo puede devenir en conflictividad social.
+
+De todos modos, se debe ver que el presupuesto con el que cuentan los municipios es bastante disparejo. Esto es especialmente visible en la provincia La Mar de Ayacucho. Mientras que para el distrito de Santa Rosa un monto cercano a 4.5 millones de soles proveniente de canon representa solo el 10.2% de su presupuesto total, para el distrito de Rio Magdalena menos de 1 millón de soles representa casi el 50% de todo su presupuesto.
