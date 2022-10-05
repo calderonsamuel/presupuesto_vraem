@@ -154,6 +154,6 @@ Rubro "CANON Y SOBRECANON, REGALIAS, RENTA DE ADUANAS Y PARTICIPACIONES" en dist
 reporte$tablas_financiamiento_distritos$JUNIN
 ```
 
-Por otro lado, es importante que los municipios ejecuten adecuadamente el presupuesto con el que cuentan. Se puede ver que son muchos los distritos donde a pesar de estar en el último trimestre del ejercicio presupuestal aún no se ejecuta ni el 40% del presupuesto proviniente tan solo de este rubro. Esto significa que la población no está sienddo beneficiada oportunamente por el dinero con el que su territorio tiene disponible, que a mediano plazo puede devenir en conflictividad social.
+Por otro lado, es importante que los municipios ejecuten adecuadamente el presupuesto con el que cuentan. Se puede ver que son muchos los distritos donde a pesar de estar en el último trimestre del ejercicio presupuestal aún no se ejecuta ni el 40% del presupuesto proveniente tan solo de este rubro. Esto significa que la población no está siendo beneficiada oportunamente por el dinero con el que su territorio tiene disponible, que a mediano plazo puede devenir en conflictividad social.
 
 De todos modos, se debe ver que el presupuesto con el que cuentan los municipios es bastante disparejo. Esto es especialmente visible en la provincia La Mar de Ayacucho. Mientras que para el distrito de Santa Rosa un monto cercano a 4.5 millones de soles proveniente de canon representa solo el 10.2% de su presupuesto total, para el distrito de Rio Magdalena menos de 1 millón de soles representa casi el 50% de todo su presupuesto.
