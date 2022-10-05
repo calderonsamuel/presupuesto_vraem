@@ -1,0 +1,242 @@
+---
+title: "Ejecución presupuestal VRAEM"
+editor: visual
+format: 
+    pptx: 
+        reference-doc: template_pptx.pptx
+execute: 
+  echo: false
+  message: false
+  warning: false
+---
+
+```{r}
+library(ggplot2)
+library(kableExtra)
+
+reporte <- readRDS("data/reporte.rds")
+
+doc_kbl <- function(tbl) {
+    tbl$body$dataset |> kable()
+}
+```
+
+------------------------------------------------------------------------
+
+::: columns
+::: {.column width="50%"}
+Para fines de este reporte se considera VRAEM a los distritos identificados dentro de la Zona VRAEM según lo publicado por DEVIDA en el Reporte N° 7: SUPERFICIE CULTIVADA CON ARBUSTO DE HOJA DE COCA MONITOREADA EN 2021[^1] en setiembre de 2022.
+
+Incluye distritos en las provincias de Satipo (Junín), La Convención (Cusco), Huanta y La Mar (Ayacucho).
+:::
+
+::: {.column width="50%"}
+```{r}
+#| fig-width: 8
+#| fig-height: 8
+reporte$vraem_mapa
+```
+:::
+:::
+
+[^1]: Recuperado de: <https://www.gob.pe/institucion/devida/informes-publicaciones/3478761-superficie-de-cultivos-de-coca-monitoreada-en-2021>
+
+# Presupuesto asignado
+
+------------------------------------------------------------------------
+
+Durante cada ejercicio presupuestal los gobiernos regionales y municipalidades cuentan con un presupuesto para la implementación de sus actividades planificadas.
+
+A lo largo del ejercicio presupuestal, las instituciones van solicitando cambios que se reflejan como cifra en el Presupuesto Institucional Modificado.
+
+## Gobiernos regionales
+
+::: columns
+::: {.column width="50%"}
+El siguiente cuadro muestra el Presupuesto Institucional Modificado obtenido por los gobiernos regionales mencionados en lo que val del año.
+
+Se puede ver que en todos los casos es superior a 2 mil millones de soles, con Cusco cercano a los 3 mil millones de soles.
+:::
+
+::: {.column width="50%"}
+```{r}
+reporte$tabla_presupuesto_regiones |> doc_kbl()
+```
+:::
+:::
+
+## Municipios provinciales
+
+::: columns
+::: {.column width="50%"}
+En el caso de las provincias, se puede ver que existe gran diferencia entre los recursos obtenidos, siendo La Convención el municipio provincial que obtiene más recursos (cerca de 1 800 millones de soles).
+:::
+
+::: {.column width="50%"}
+```{r}
+reporte$tabla_presupuesto_provincias |> doc_kbl()
+```
+:::
+:::
+
+## Municipios distritales
+
+::: columns
+::: {.column width="50%"}
+En el caso de los distritos, se puede ver que el presupuesto es variado en ciertas provincias como Satipo, ya que ciertos distritos se ubican entre aquellos con mayor presupuesto, pero otros dentro de aquellos con menos.
+
+Los distritos de la provincia La Mar en Ayacucho reciben menos que el resto dentro de la zona VRAEM.
+:::
+
+::: {.column width="50%"}
+```{r}
+reporte$tablas_presupuesto_distritos$CUSCO |> doc_kbl()
+```
+:::
+:::
+
+------------------------------------------------------------------------
+
+::: columns
+::: {.column width="50%"}
+```{r}
+reporte$tablas_presupuesto_distritos$AYACUCHO |> doc_kbl()
+```
+:::
+
+::: {.column width="50%"}
+```{r}
+reporte$tablas_presupuesto_distritos$JUNIN |> doc_kbl()
+```
+:::
+:::
+
+# Ejecución Presupuestal
+
+------------------------------------------------------------------------
+
+La ejecución presupuestal es un indicador de qué tanto las autoridades políticas están usando el presupuesto asignado para el ejercicio fiscal en bienes y servicios que se proveen a la población, y se calcula usando como base el Presupuesto Institucional Modificado.
+
+Por lo general, estos bienes y servicios corresponden con actividades, obras o proyectos de inversión considerados en la planificación presupuestaria y la estructura de soporte para su ejecución (que incluye personal, mantenimiento, etc).
+
+## Gobiernos regionales
+
+::: columns
+::: {.column width="50%"}
+Los gobiernos regionales que tienen territorio dentro de la zona VRAEM son Ayacucho, Junin y Cusco. De ellos, Ayacucho ha tenido una menor ejecución presupuestal hasta la fecha.
+:::
+
+::: {.column width="50%"}
+```{r}
+#| fig-width: 8
+#| fig-height: 8
+reporte$mapa_ejecutado_regiones
+```
+:::
+:::
+
+## Municipios provinciales
+
+::: columns
+::: {.column width="50%"}
+A nivel de provincias se puede ver que de aquellas que tienen territorios dentro de la zona VRAEM, La Convención es la que menos ha ejecutado hasta la fecha, con solo 44.3% de avance. Recordemos que esta es la provincia con mayor PIM.
+:::
+
+::: {.column width="50%"}
+```{r}
+#| fig-width: 8
+#| fig-height: 8
+reporte$mapa_ejecutado_provincias
+```
+:::
+:::
+
+## Municipios distritales
+
+::: columns
+::: {.column width="50%"}
+Los distritos muestran mayor variabilidad en su ejecución. Por ejemplo, los distritos vecinos de Santa Rosa y Anchihuay son los que tienen respectivamente la mayor (63.6%) y menor (28.9%) ejecución presupuestal en lo que va del año. El mapa muestra la información para los distritos no mencionados.
+:::
+
+::: {.column width="50%"}
+![](mapas/mapa_ejecucion_distrital.png){fig-align="center"}
+:::
+:::
+
+# Fuentes de financiamiento
+
+------------------------------------------------------------------------
+
+Lo siguiente a revisar es de dónde proviene el financiamiento para la ejecución presupuestal en la zona de influencia del VRAEM. En específico, se revisará de qué manera se aprovechan los recursos obtenidos por el rubro "CANON Y SOBRECANON, REGALIAS, RENTA DE ADUANAS Y PARTICIPACIONES" y qué peso tiene esta fuente de financiamiento en el PIM de los gobiernos regionales y municipios.
+
+## Gobiernos regionales
+
+La siguiente tabla muestra que, de las regiones revisadas, la que más recursos recibe del rubro referido es Cusco, con un monto superior a los 4 mil millones de soles. Este monto representa el 24.8 del total del presupuesto que recibe el gobierno regional.
+
+De ese monto, en lo que va del ejercicio presupuestal se ha ejecutado el 61.9%. Se cuenta con la misma información para Ayacucho y Junin, donde el peso del canon es menor en el presupuesto total, sin dejar de ser significativo.
+
+------------------------------------------------------------------------
+
+```{r}
+reporte$tabla_financiamiento_regiones |> doc_kbl()
+```
+
+## Municipios provinciales
+
+::: columns
+::: {.column width="50%"}
+En lo que respecta a las provincias, se puede apreciar que la que más es financiada por el rubro "CANON Y SOBRECANON, REGALIAS, RENTA DE ADUANAS Y PARTICIPACIONES" es La Convención en Cusco, donde el rubro referido financia el 85.8% de su presupuesto total.
+
+En general, las provincias han ejecutado alrededor del 40% del presupuesto proveniente de este rubro.
+:::
+
+::: {.column width="50%"}
+```{r}
+reporte$tabla_financiamiento_provincias |> doc_kbl()
+```
+:::
+:::
+
+## Municipios distritales
+
+::: columns
+::: {.column width="50%"}
+Respecto a los distritos, nuevamente se puede ver que quienes reciben más presupuesto en ese rubro están en La Convención.
+
+No solo eso, sino que el aporte del rubro "CANON Y SOBRECANON, REGALIAS, RENTA DE ADUANAS Y PARTICIPACIONES" tiene un peso muy significativo en su presupuesto.
+:::
+
+::: {.column width="50%"}
+```{r}
+reporte$tablas_financiamiento_distritos$CUSCO |> doc_kbl()
+```
+:::
+:::
+
+::: columns
+::: {.column width="50%"}
+```{r}
+reporte$tablas_financiamiento_distritos$AYACUCHO |> doc_kbl()
+```
+:::
+
+::: {.column width="50%"}
+```{r}
+reporte$tablas_financiamiento_distritos$JUNIN |> doc_kbl()
+```
+:::
+:::
+
+------------------------------------------------------------------------
+
+Es importante que los municipios ejecuten adecuadamente el presupuesto con el que cuentan.
+
+Se puede ver que son muchos los distritos donde a pesar de estar en el último trimestre del ejercicio presupuestal aún no se ejecuta ni el 40% del presupuesto proveniente tan solo de este rubro.
+
+Esto significa que la población no está siendo beneficiada oportunamente por el dinero con el que su territorio tiene disponible, que a mediano plazo puede devenir en conflictividad social.
+
+------------------------------------------------------------------------
+
+De todos modos, se debe ver que el presupuesto con el que cuentan los municipios es bastante disparejo.
+
+Esto es especialmente visible en la provincia La Mar de Ayacucho. Mientras que para el distrito de Santa Rosa un monto cercano a 4.5 millones de soles proveniente de canon representa solo el 10.2% de su presupuesto total, para el distrito de Rio Magdalena menos de 1 millón de soles representa casi el 50% de todo su presupuesto.
